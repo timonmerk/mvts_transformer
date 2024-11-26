@@ -1,0 +1,26 @@
+[project]
+name = "mvts-transformer"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "ipdb",
+    "tqdm",
+    "xlrd",
+    "pandas",
+    "xlutils",
+    "tabulate",
+    "xlwt",
+    "torch",
+    "tensorboard",
+    "matplotlib",
+    "numpy",
+    "scikit_learn",
+    "sktime>=0.34.0",
+    "tensorflow>=2.18.0",
+    "mne>=1.8.0",
+    "torch-tb-profiler>=0.4.3",
+    "torchvision>=0.20.1",
+    "fastparquet>=2024.11.0",
+]

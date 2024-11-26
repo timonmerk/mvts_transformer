@@ -5,11 +5,12 @@ import glob
 import re
 import logging
 from itertools import repeat, chain
+import mne
 
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from sktime.utils import load_data
+#from sktime.utils import load_data
 
 from datasets import utils
 
@@ -442,7 +443,99 @@ class PMUData(BaseData):
         df = pd.read_csv(filepath)
         return df
 
+class MyNewDataClass(BaseData):
+    """
+    Dataset class for welding dataset.
+    Attributes:
+        all_df: dataframe indexed by ID, with multiple rows corresponding to the same index (sample).
+            Each row is a time step; Each column contains either metadata (e.g. timestamp) or a feature.
+        feature_df: contains the subset of columns of `all_df` which correspond to selected features
+        feature_names: names of columns contained in `feature_df` (same as feature_df.columns)
+        all_IDs: IDs contained in `all_df`/`feature_df` (same as all_df.index.unique() )
+        max_seq_len: maximum sequence (time series) length. If None, script argument `max_seq_len` will be used.
+            (Moreover, script argument overrides this attribute)
+    """
+    def __init__(self, root_dir, file_list=None, pattern=None, n_proc=1, limit_size=None, config=None):
+
+        self.set_num_processes(n_proc=n_proc)
+
+        self.max_seq_len = 250
+        #self.all_df = self.load_all_mockup_random()
+        #self.all_df = self.load_all_bv()
+        self.all_df = self.load_npy()
+        self.all_df = self.all_df.set_index('ID')
+        self.all_IDs = self.all_df.index.unique()
+        
+        if limit_size is not None:
+            if limit_size > 1:
+                limit_size = int(limit_size)
+            else:  # interpret as proportion if in (0, 1]
+                limit_size = int(limit_size * len(self.all_IDs))
+            self.all_IDs = self.all_IDs[:limit_size]
+            self.all_df = self.all_df.loc[self.all_IDs]
+
+        self.feature_names = list(self.all_df.columns)
+        self.feature_df = self.all_df[self.feature_names]
+
+    def load_all_mockup_random(self,):
+        """
+        Loads datasets from csv files contained in `root_dir` into a dataframe, optionally choosing from `pattern`
+        Args:
+            root_dir: directory containing all individual .csv files
+            file_list: optionally, provide a list of file paths within `root_dir` to consider.
+                Otherwise, entire `root_dir` contents will be used.
+            pattern: optionally, apply regex string to select subset of files
+        Returns:
+            all_df: a single (possibly concatenated) dataframe with all data corresponding to specified files
+        """
+        N_ROWS = self.max_seq_len*300 #1000*300
+        N_COLS = 5
+        # set random dataframe
+        all_df = pd.DataFrame(np.random.rand(N_ROWS, N_COLS), columns=[f"col_{i}" for i in range(N_COLS)])
+        all_df['ID'] = np.repeat(np.arange(1, N_ROWS//self.max_seq_len + 1), self.max_seq_len)
+        return all_df
+    
+    def load_all_bv(self,):
+        PATH_ = "/Users/Timon/Documents/Data/BIDS_BERLIN/sub-002/ses-EphysMedOff01/ieeg/sub-002_ses-EphysMedOff01_task-Rest_acq-StimOff_run-01_ieeg.vhdr"
+        raw = mne.io.read_raw_brainvision(PATH_)
+        raw.resample(250)
+        raw.filter(0.5, 90)
+        raw.pick([ch for ch in raw.ch_names if "ECOG" in ch])
+        data = raw.get_data()
+        all_df = pd.DataFrame(data.T, columns=raw.ch_names)
+        # set a column ID with first 1000 samples 1, next 1000 samples 2, etc.
+
+        ID_col = np.repeat(np.arange(1, all_df.shape[0]//self.max_seq_len + 1), self.max_seq_len)
+        all_df = all_df.iloc[:len(ID_col)]
+        all_df['ID'] = ID_col
+        # standard normalize data for each ID
+        #for ID in all_df['ID'].unique():
+        #    all_df.loc[all_df['ID'] == ID, all_df.columns[:-1]] = (all_df.loc[all_df['ID'] == ID, all_df.columns[:-1]] - all_df.loc[all_df['ID'] == ID, all_df.columns[:-1]].mean()) / all_df.loc[all_df['ID'] == ID, all_df.columns[:-1]].std()
+
+        columns_to_standardize = all_df.columns[:-1]
+
+        # Group by 'ID' and apply standardization for each group
+        all_df[columns_to_standardize] = all_df.groupby('ID')[columns_to_standardize].transform(
+            lambda x: (x - x.mean()) / x.std()
+        )
+
+        return all_df
+
+    def load_npy(self,):
+        PATH_ = "/Users/Timon/Documents/mvts_transformer/data/sub_rcs02l.npy"
+        data = np.load(PATH_).astype(np.float64)
+        all_df = pd.DataFrame(data, columns=[f"col_{i}" for i in range(data.shape[1])])
+        all_df['ID'] = np.repeat(np.arange(1, all_df.shape[0]//self.max_seq_len + 1), self.max_seq_len)
+        columns_to_standardize = all_df.columns[:-1]
+
+        # Group by 'ID' and apply standardization for each group
+        all_df[columns_to_standardize] = all_df.groupby('ID')[columns_to_standardize].transform(
+            lambda x: np.clip((x - x.mean()) / x.std(), -9, 9)
+        )
+
+        return all_df
 
 data_factory = {'weld': WeldData,
                 'tsra': TSRegressionArchive,
-                'pmu': PMUData}
+                'pmu': PMUData,
+                'mydataset': MyNewDataClass}

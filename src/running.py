@@ -188,7 +188,7 @@ def validate(val_evaluator, tensorboard_writer, config, best_metrics, best_value
     logger.info("Evaluating on validation set ...")
     eval_start_time = time.time()
     with torch.no_grad():
-        aggr_metrics, per_batch = val_evaluator.evaluate(epoch, keep_all=True)
+        aggr_metrics, per_batch = val_evaluator.evaluate(epoch, keep_all=True, extract_model_features=True)
     eval_runtime = time.time() - eval_start_time
     logger.info("Validation runtime: {} hours, {} minutes, {} seconds\n".format(*utils.readable_time(eval_runtime)))
 
@@ -219,7 +219,52 @@ def validate(val_evaluator, tensorboard_writer, config, best_metrics, best_value
         best_metrics = aggr_metrics.copy()
 
         pred_filepath = os.path.join(config['pred_dir'], 'best_predictions')
-        np.savez(pred_filepath, **per_batch)
+        
+        for key, value in per_batch.items():
+            DEBUG = False
+            if DEBUG:
+                from matplotlib import pyplot as plt
+
+                from scipy import stats
+                
+                for ts_idx in np.arange(0, 40):
+                    ch_idx = 5
+                    plt.subplot(111)
+                    #ts_idx = 2
+                    plt.plot(per_batch["targets"][0][ts_idx, :, ch_idx], label=f"target {ch_idx}")
+                    plt.plot(per_batch["predictions"][0][ts_idx, :, ch_idx], label=f"predictions {ch_idx}")
+                    plt.plot(per_batch["target_masks"][0][ts_idx, :, ch_idx], label=f"mask {ch_idx}")
+
+                    #plt.plot(stats.zscore(per_batch["targets"][0][ts_idx, :, ch_idx]), label=f"target {ch_idx}")
+                    #plt.plot(stats.zscore(per_batch["predictions"][0][ts_idx, :, ch_idx]), label=f"predictions {ch_idx}")
+                    #plt.plot(per_batch["target_masks"][0][ts_idx, :, ch_idx], label=f"mask {ch_idx}")
+                    plt.legend()
+                    plt.show(block=True)
+
+                target_idx = 10
+                plt.subplot(121)
+                for i in range(2):
+                    plt.plot(per_batch["targets"][0][target_idx, :, i], label=f"ch {i}")
+                plt.legend()
+                plt.subplot(122)
+                for i in range(2):
+                    plt.plot(per_batch["predictions"][0][target_idx, :, i], label=f"ch {i}")
+                    plt.plot(per_batch["target_masks"][0][target_idx, :, i], label=f"mask {i}")
+                plt.legend()
+                plt.show(block=True)
+
+
+                plt.imshow(per_batch["target_masks"][0][4, :, :].T, aspect="auto", interpolation='none')
+                plt.show(block=True)
+            if len(per_batch[key]) > 1:
+                per_batch[key] = per_batch[key][:-1]
+            if key == 'metrics':
+                min_length = min([len(x[0]) for x in per_batch[key]])
+                per_batch[key] = [x[0][:min_length] for x in per_batch[key]]
+        #np.save(pred_filepath, **per_batch)   # resulted in error because of inhomogeneous batch size number
+        # save per_batch dict
+        with open(pred_filepath + '.pickle', 'wb') as f:
+            pickle.dump(per_batch, f, pickle.HIGHEST_PROTOCOL)
 
     return aggr_metrics, best_metrics, best_value
 
@@ -268,6 +313,12 @@ class BaseRunner(object):
         dyn_string = prefix + dyn_string
         self.printer.print(dyn_string)
 
+class FeatureExtractor:
+    def __init__(self):
+        self.extracted_features = None
+
+    def __call__(self, module, input_, output):
+        self.extracted_features = output
 
 class UnsupervisedRunner(BaseRunner):
 
@@ -286,6 +337,24 @@ class UnsupervisedRunner(BaseRunner):
 
             predictions = self.model(X.to(self.device), padding_masks)  # (batch_size, padded_length, feat_dim)
 
+            DEBUG = False
+            if DEBUG:
+                from matplotlib import pyplot as plt
+
+                from scipy import stats
+                for ts_idx in np.arange(0, 20):
+                    ch_idx = 3
+                    plt.subplot(111)
+                    #ts_idx = 2
+                    plt.plot(targets[ts_idx, :, ch_idx].cpu().numpy(), label=f"target {ch_idx}")
+                    plt.plot(predictions[ts_idx, :, ch_idx].detach().cpu().numpy(), label=f"predictions {ch_idx}")
+                    plt.plot(target_masks[ts_idx, :, ch_idx].cpu().numpy(), label=f"mask {ch_idx}")
+
+                    #plt.plot(stats.zscore(per_batch["targets"][0][ts_idx, :, ch_idx]), label=f"target {ch_idx}")
+                    #plt.plot(stats.zscore(per_batch["predictions"][0][ts_idx, :, ch_idx]), label=f"predictions {ch_idx}")
+                    #plt.plot(per_batch["target_masks"][0][ts_idx, :, ch_idx], label=f"mask {ch_idx}")
+                    plt.legend()
+                    plt.show(block=True)
             # Cascade noise masks (batch_size, padded_length, feat_dim) and padding masks (batch_size, padded_length)
             target_masks = target_masks * padding_masks.unsqueeze(-1)
             loss = self.loss_module(predictions, targets, target_masks)  # (num_active,) individual loss (square error per element) for each active value in batch
@@ -319,7 +388,7 @@ class UnsupervisedRunner(BaseRunner):
         self.epoch_metrics['loss'] = epoch_loss
         return self.epoch_metrics
 
-    def evaluate(self, epoch_num=None, keep_all=True):
+    def evaluate(self, epoch_num=None, keep_all=True, extract_model_features=False):
 
         self.model = self.model.eval()
 
@@ -329,8 +398,14 @@ class UnsupervisedRunner(BaseRunner):
         if keep_all:
             per_batch = {'target_masks': [], 'targets': [], 'predictions': [], 'metrics': [], 'IDs': []}
         for i, batch in enumerate(self.dataloader):
-
+            
             X, targets, target_masks, padding_masks, IDs = batch
+            if extract_model_features:
+                extractor = FeatureExtractor()
+                self.model.transformer_encoder.register_forward_hook(extractor)
+                _ = self.model(X.to(self.device), padding_masks.to(self.device))
+                model_extracted_features = extractor.extracted_features
+
             targets = targets.to(self.device)
             target_masks = target_masks.to(self.device)  # 1s: mask and predict, 0s: unaffected input (ignore)
             padding_masks = padding_masks.to(self.device)  # 0s: ignore
@@ -352,11 +427,13 @@ class UnsupervisedRunner(BaseRunner):
             mean_loss = batch_loss / len(loss)  # mean loss (over active elements) used for optimization the batch
 
             if keep_all:
+                #if X.shape[0] == self.dataloader.batch_size:
                 per_batch['target_masks'].append(target_masks.cpu().numpy())
                 per_batch['targets'].append(targets.cpu().numpy())
                 per_batch['predictions'].append(predictions.cpu().numpy())
                 per_batch['metrics'].append([loss.cpu().numpy()])
                 per_batch['IDs'].append(IDs)
+                per_batch['model_features'] = model_extracted_features.cpu().numpy()
 
             metrics = {"loss": mean_loss}
             if i % self.print_interval == 0:

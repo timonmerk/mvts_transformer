@@ -30,3 +30,8 @@ _build
 logs
 
 .idea
+data/*
+output/*
+
+.DS_Store
+records.xls

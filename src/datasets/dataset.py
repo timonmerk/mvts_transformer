@@ -32,6 +32,9 @@ class ImputationDataset(Dataset):
         """
 
         X = self.feature_df.loc[self.IDs[ind]].values  # (seq_length, feat_dim) array
+        if len(X.shape) == 1:
+            X = np.expand_dims(X, axis=1)
+            
         mask = noise_mask(X, self.masking_ratio, self.mean_mask_length, self.mode, self.distribution,
                           self.exclude_feats)  # (seq_length, feat_dim) boolean array
 

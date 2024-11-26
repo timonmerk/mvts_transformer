@@ -54,7 +54,7 @@ class Options(object):
                                       "otherwise as an integer absolute number of samples")
         self.parser.add_argument('--test_only', choices={'testset', 'fold_transduction'},
                                  help='If set, no training will take place; instead, trained model will be loaded and evaluated on test set')
-        self.parser.add_argument('--data_class', type=str, default='weld',
+        self.parser.add_argument('--data_class', type=str, default='mydataset',
                                  help="Which type of data should be processed.")
         self.parser.add_argument('--labels', type=str,
                                  help="In case a dataset contains several labels (multi-task), "
@@ -89,11 +89,11 @@ class Options(object):
                                        "                          transduction of features to other features,\n"
                                        "                          classification of entire time series,\n"
                                        "                          regression of scalar(s) for entire time series"))
-        self.parser.add_argument('--masking_ratio', type=float, default=0.15,
+        self.parser.add_argument('--masking_ratio', type=float, default=0.1,
                                  help='Imputation: mask this proportion of each variable')
-        self.parser.add_argument('--mean_mask_length', type=float, default=3,
+        self.parser.add_argument('--mean_mask_length', type=float, default=10,
                                  help="Imputation: the desired mean length of masked segments. Used only when `mask_distribution` is 'geometric'.")
-        self.parser.add_argument('--mask_mode', choices={'separate', 'concurrent'}, default='separate',
+        self.parser.add_argument('--mask_mode', choices={'separate', 'concurrent'}, default='concurrent',
                                  help=("Imputation: whether each variable should be masked separately "
                                        "or all variables at a certain positions should be masked concurrently"))
         self.parser.add_argument('--mask_distribution', choices={'geometric', 'bernoulli'}, default='geometric',
@@ -115,7 +115,7 @@ class Options(object):
                                  help='Number of training epochs')
         self.parser.add_argument('--val_interval', type=int, default=2,
                                  help='Evaluate on validation set every this many epochs. Must be >= 1.')
-        self.parser.add_argument('--optimizer', choices={"Adam", "RAdam"}, default="Adam", help="Optimizer")
+        self.parser.add_argument('--optimizer', choices={"Adam", "RAdam"}, default="RAdam", help="Optimizer")
         self.parser.add_argument('--lr', type=float, default=1e-3,
                                  help='learning rate (default holds for batch size 64)')
         self.parser.add_argument('--lr_step', type=str, default='1000000',
@@ -146,7 +146,7 @@ class Options(object):
                                  help="""Used instead of the `max_seq_len`, when the data samples must be
                                  segmented into windows. Determines maximum input sequence length 
                                  (size of transformer layers).""")
-        self.parser.add_argument('--d_model', type=int, default=64,
+        self.parser.add_argument('--d_model', type=int, default=32,
                                  help='Internal dimension of transformer embeddings')
         self.parser.add_argument('--dim_feedforward', type=int, default=256,
                                  help='Dimension of dense feedforward part of transformer layer')
