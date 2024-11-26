@@ -522,7 +522,7 @@ class MyNewDataClass(BaseData):
         return all_df
 
     def load_npy(self,):
-        CLUSTER = True
+        CLUSTER = False
         if CLUSTER:
             PATH_ = "data/sub_rcs02l.npy"
             data = np.load(PATH_).astype(np.float64)
@@ -536,7 +536,7 @@ class MyNewDataClass(BaseData):
             )
             #all_df.to_csv("data/rcs02l_standardized.csv", index=False)
         else:
-            all_df = pd.read_csv("data/rcs02l_standardized.csv", index_col='ID')
+            all_df = pd.read_csv("data/rcs02l_standardized.csv")
         return all_df
 
 data_factory = {'weld': WeldData,
