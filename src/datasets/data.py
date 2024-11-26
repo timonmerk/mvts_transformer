@@ -522,17 +522,21 @@ class MyNewDataClass(BaseData):
         return all_df
 
     def load_npy(self,):
-        PATH_ = "/Users/Timon/Documents/mvts_transformer/data/sub_rcs02l.npy"
-        data = np.load(PATH_).astype(np.float64)
-        all_df = pd.DataFrame(data, columns=[f"col_{i}" for i in range(data.shape[1])])
-        all_df['ID'] = np.repeat(np.arange(1, all_df.shape[0]//self.max_seq_len + 1), self.max_seq_len)
-        columns_to_standardize = all_df.columns[:-1]
+        CLUSTER = True
+        if CLUSTER:
+            PATH_ = "data/sub_rcs02l.npy"
+            data = np.load(PATH_).astype(np.float64)
+            all_df = pd.DataFrame(data, columns=[f"col_{i}" for i in range(data.shape[1])])
+            all_df['ID'] = np.repeat(np.arange(1, all_df.shape[0]//self.max_seq_len + 1), self.max_seq_len)
+            columns_to_standardize = all_df.columns[:-1]
 
-        # Group by 'ID' and apply standardization for each group
-        all_df[columns_to_standardize] = all_df.groupby('ID')[columns_to_standardize].transform(
-            lambda x: np.clip((x - x.mean()) / x.std(), -9, 9)
-        )
-
+            # Group by 'ID' and apply standardization for each group
+            all_df[columns_to_standardize] = all_df.groupby('ID')[columns_to_standardize].transform(
+                lambda x: np.clip((x - x.mean()) / x.std(), -9, 9)
+            )
+            #all_df.to_csv("data/rcs02l_standardized.csv", index=False)
+        else:
+            all_df = pd.read_csv("data/rcs02l_standardized.csv", index_col='ID')
         return all_df
 
 data_factory = {'weld': WeldData,
