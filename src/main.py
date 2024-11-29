@@ -31,7 +31,7 @@ from running import setup, pipeline_factory, validate, check_progress, NEG_METRI
 from utils import utils
 from datasets.data import data_factory, Normalizer
 from datasets.datasplit import split_dataset
-from models.ts_transformer import model_factory
+from models.ts_transformer import model_factory, _CustomDataParallel
 from models.loss import get_loss_module
 from optimizers import get_optimizer
 
@@ -151,7 +151,7 @@ def main(config):
 
     if torch.cuda.device_count() > 1:
         logger.info("Using {} GPUs!".format(torch.cuda.device_count()))
-        model = nn.DataParallel(model)
+        model = _CustomDataParallel(model)
 
     if config['freeze']:
         for name, param in model.named_parameters():
