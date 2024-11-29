@@ -26,10 +26,15 @@ def model_factory(config, data):
                                              pos_encoding=config['pos_encoding'], activation=config['activation'],
                                              norm=config['normalization_layer'], freeze=config['freeze'])
         elif config['model'] == 'transformer':
-            return TSTransformerEncoder(feat_dim, max_seq_len, config['d_model'], config['num_heads'],
+            model = TSTransformerEncoder(feat_dim, max_seq_len, config['d_model'], config['num_heads'],
                                         config['num_layers'], config['dim_feedforward'], dropout=config['dropout'],
                                         pos_encoding=config['pos_encoding'], activation=config['activation'],
                                         norm=config['normalization_layer'], freeze=config['freeze'])
+            if torch.cuda.device_count() > 1:
+                print("Using {} GPUs!".format(torch.cuda.device_count()))
+                model = nn.DataParallel(model)
+
+            return model
 
     if (task == "classification") or (task == "regression"):
         num_labels = len(data.class_names) if task == "classification" else data.labels_df.shape[1]  # dimensionality of labels
