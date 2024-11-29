@@ -21,6 +21,7 @@ import json
 # 3rd party packages
 from tqdm import tqdm
 import torch
+from torch import nn
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
@@ -147,6 +148,10 @@ def main(config):
     # Create model
     logger.info("Creating model ...")
     model = model_factory(config, my_data)
+
+    if torch.cuda.device_count() > 1:
+        logger.info("Using {} GPUs!".format(torch.cuda.device_count()))
+        model = nn.DataParallel(model)
 
     if config['freeze']:
         for name, param in model.named_parameters():
