@@ -8,7 +8,8 @@ import string
 import random
 from collections import OrderedDict
 import time
-import pickle
+import dill as pickle
+
 from functools import partial
 
 import ipdb
@@ -21,6 +22,11 @@ from utils import utils, analysis
 from models.loss import l2_reg_loss
 from datasets.dataset import ImputationDataset, TransductionDataset, ClassiregressionDataset, collate_unsuperv, collate_superv
 
+def collate_function(max_len):
+    """Returns a custom collate function that uses the provided max_len."""
+    def collate_fn(batch):
+        return collate_unsuperv(batch, max_len)
+    return collate_fn
 
 logger = logging.getLogger('__main__')
 
@@ -115,7 +121,8 @@ def fold_evaluate(dataset, model, device, loss_module, target_feats, config, dat
                             shuffle=False,
                             num_workers=config['num_workers'],
                             pin_memory=True,
-                            collate_fn=lambda x: collate_unsuperv(x, max_len=config['max_seq_len']))
+                            collate_fn=collate_function(config['max_seq_len']))
+                            #collate_fn=lambda x: collate_unsuperv(x, max_len=config['max_seq_len']))
 
         evaluator = UnsupervisedRunner(model, loader, device, loss_module,
                                        print_interval=config['print_interval'], console=config['console'])
@@ -188,7 +195,7 @@ def validate(val_evaluator, tensorboard_writer, config, best_metrics, best_value
     logger.info("Evaluating on validation set ...")
     eval_start_time = time.time()
     with torch.no_grad():
-        aggr_metrics, per_batch = val_evaluator.evaluate(epoch, keep_all=True, extract_model_features=True)
+        aggr_metrics, per_batch = val_evaluator.evaluate(epoch, keep_all=True, extract_model_features=False)
     eval_runtime = time.time() - eval_start_time
     logger.info("Validation runtime: {} hours, {} minutes, {} seconds\n".format(*utils.readable_time(eval_runtime)))
 
@@ -332,10 +339,11 @@ class UnsupervisedRunner(BaseRunner):
 
             X, targets, target_masks, padding_masks, IDs = batch
             targets = targets.to(self.device)
+            X = X.to(self.device)
             target_masks = target_masks.to(self.device)  # 1s: mask and predict, 0s: unaffected input (ignore)
             padding_masks = padding_masks.to(self.device)  # 0s: ignore
 
-            predictions = self.model(X.to(self.device), padding_masks)  # (batch_size, padded_length, feat_dim)
+            predictions = self.model(X, padding_masks)  # (batch_size, padded_length, feat_dim)
 
             DEBUG = False
             if DEBUG:
@@ -433,7 +441,7 @@ class UnsupervisedRunner(BaseRunner):
                 per_batch['predictions'].append(predictions.cpu().numpy())
                 per_batch['metrics'].append([loss.cpu().numpy()])
                 per_batch['IDs'].append(IDs)
-                per_batch['model_features'] = model_extracted_features.cpu().numpy()
+                #per_batch['model_features'] = model_extracted_features.cpu().numpy()
 
             metrics = {"loss": mean_loss}
             if i % self.print_interval == 0:

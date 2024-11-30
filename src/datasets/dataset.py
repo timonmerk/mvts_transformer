@@ -12,7 +12,13 @@ class ImputationDataset(Dataset):
 
         self.data = data  # this is a subclass of the BaseData class in data.py
         self.IDs = indices  # list of data IDs, but also mapping between integer index and ID
-        self.feature_df = self.data.feature_df.loc[self.IDs]
+        self.feature_df = self.data.all_df.loc[self.IDs]
+        #self.all_data = self.data.all_data[self.IDs]
+
+        # THIS should be times for the large array!
+        #self.ID_indices = np.where(np.isin(self.data.IDs, self.IDs))[0]
+        #self.ID_values = self.data.IDs[self.ID_indices]
+        #self.all_data = self.data.all_data[self.ID_indices]
 
         self.masking_ratio = masking_ratio
         self.mean_mask_length = mean_mask_length
@@ -32,6 +38,9 @@ class ImputationDataset(Dataset):
         """
 
         X = self.feature_df.loc[self.IDs[ind]].values  # (seq_length, feat_dim) array
+        
+        #X = self.data.all_data[np.where(np.isin(self.data.IDs, ind))[0]]#.astype(np.float64)
+        #X = self.data.all_data[np.isin(self.data.IDs, ind)]
         if len(X.shape) == 1:
             X = np.expand_dims(X, axis=1)
             

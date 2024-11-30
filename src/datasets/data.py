@@ -462,20 +462,22 @@ class MyNewDataClass(BaseData):
         self.max_seq_len = 250
         #self.all_df = self.load_all_mockup_random()
         #self.all_df = self.load_all_bv()
-        self.all_df = self.load_npy()
-        self.all_df = self.all_df.set_index('ID')
-        self.all_IDs = self.all_df.index.unique()
-        
-        if limit_size is not None:
-            if limit_size > 1:
-                limit_size = int(limit_size)
-            else:  # interpret as proportion if in (0, 1]
-                limit_size = int(limit_size * len(self.all_IDs))
-            self.all_IDs = self.all_IDs[:limit_size]
-            self.all_df = self.all_df.loc[self.all_IDs]
+        #self.all_df = self.load_npy()
+        #self.all_df = self.all_df.set_index('ID')
+        #self.all_IDs = self.all_df.index.unique()
+        self.all_data = self.load_all_npy()
 
-        self.feature_names = list(self.all_df.columns)
-        self.feature_df = self.all_df[self.feature_names]
+        # skip if not debug
+        #self.all_data = self.all_data[:10000]
+        RUN_NPY = False
+        if RUN_NPY:
+            self.all_IDs = np.arange(self.all_data.shape[0] // 250).astype(int)
+            self.IDs = np.repeat(self.all_IDs, 250)
+        else:
+            self.all_df = pd.DataFrame(self.all_data, columns=[f"col_{i}" for i in range(self.all_data.shape[1])])
+            self.all_IDs = np.arange(self.all_data.shape[0] // 250).astype(int)
+            self.all_df['ID'] = np.repeat(self.all_IDs, 250)
+            self.all_df = self.all_df.set_index('ID')
 
     def load_all_mockup_random(self,):
         """
@@ -538,6 +540,10 @@ class MyNewDataClass(BaseData):
         else:
             all_df = pd.read_csv("data/rcs02l_standardized.csv")
         return all_df
+
+    def load_all_npy(self,):
+        arr = np.load("data/all_subs.npy")
+        return arr
 
 data_factory = {'weld': WeldData,
                 'tsra': TSRegressionArchive,

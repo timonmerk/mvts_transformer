@@ -17,6 +17,7 @@ import sys
 import time
 import pickle
 import json
+#import dill as pickle
 
 # 3rd party packages
 from tqdm import tqdm
@@ -34,10 +35,11 @@ from datasets.datasplit import split_dataset
 from models.ts_transformer import model_factory, _CustomDataParallel
 from models.loss import get_loss_module
 from optimizers import get_optimizer
+import multiprocessing
 
 
 def main(config):
-
+    multiprocessing.set_start_method('fork', force=True)
     total_epoch_time = 0
     total_eval_time = 0
 
@@ -58,19 +60,14 @@ def main(config):
 
     logger.info("Using device: {}".format(device))
     if device == 'cuda':
-        logger.info("Device index: {}".format(torch.cuda.current_device()))
+        logger.info("Device index: {}".format(torch.cuda.device_count()))
 
     # Build data
     logger.info("Loading and preprocessing data ...")
     data_class = data_factory[config['data_class']]
     my_data = data_class(config['data_dir'], pattern=config['pattern'], n_proc=config['n_proc'], limit_size=config['limit_size'], config=config)
-    feat_dim = my_data.feature_df.shape[1]  # dimensionality of data features
-    if config['task'] == 'classification':
-        validation_method = 'StratifiedShuffleSplit'
-        labels = my_data.labels_df.values.flatten()
-    else:
-        validation_method = 'ShuffleSplit'
-        labels = None
+    validation_method = 'ShuffleSplit'
+    labels = None
 
     # Split dataset
     test_data = my_data
@@ -123,28 +120,6 @@ def main(config):
                        'val_indices': list(val_indices),
                        'test_indices': list(test_indices)}, f, indent=4)
 
-    # Pre-process features
-    NORMALIZATION = False
-    if NORMALIZATION:
-        normalizer = None
-        if config['norm_from']:
-            with open(config['norm_from'], 'rb') as f:
-                norm_dict = pickle.load(f)
-            normalizer = Normalizer(**norm_dict)
-        elif config['normalization'] is not None:
-            normalizer = Normalizer(config['normalization'])
-            my_data.feature_df.loc[train_indices] = normalizer.normalize(my_data.feature_df.loc[train_indices])
-            if not config['normalization'].startswith('per_sample'):
-                # get normalizing values from training set and store for future use
-                norm_dict = normalizer.__dict__
-                with open(os.path.join(config['output_dir'], 'normalization.pickle'), 'wb') as f:
-                    pickle.dump(norm_dict, f, pickle.HIGHEST_PROTOCOL)
-        if normalizer is not None:
-            if len(val_indices):
-                val_data.feature_df.loc[val_indices] = normalizer.normalize(val_data.feature_df.loc[val_indices])
-            if len(test_indices):
-                test_data.feature_df.loc[test_indices] = normalizer.normalize(test_data.feature_df.loc[test_indices])
-
     # Create model
     logger.info("Creating model ...")
     model = model_factory(config, my_data)
@@ -191,25 +166,6 @@ def main(config):
 
     loss_module = get_loss_module(config)
 
-    if config['test_only'] == 'testset':  # Only evaluate and skip training
-        dataset_class, collate_fn, runner_class = pipeline_factory(config)
-        test_dataset = dataset_class(test_data, test_indices)
-
-        test_loader = DataLoader(dataset=test_dataset,
-                                 batch_size=config['batch_size'],
-                                 shuffle=False,
-                                 num_workers=config['num_workers'],
-                                 pin_memory=True,
-                                 collate_fn=lambda x: collate_fn(x, max_len=model.max_len))
-        test_evaluator = runner_class(model, test_loader, device, loss_module,
-                                            print_interval=config['print_interval'], console=config['console'])
-        aggr_metrics_test, per_batch_test = test_evaluator.evaluate(keep_all=True)
-        print_str = 'Test Summary: '
-        for k, v in aggr_metrics_test.items():
-            print_str += '{}: {:8f} | '.format(k, v)
-        logger.info(print_str)
-        return
-    
     # Initialize data generators
     dataset_class, collate_fn, runner_class = pipeline_factory(config)
     val_dataset = dataset_class(val_data, val_indices)
@@ -242,10 +198,10 @@ def main(config):
     best_metrics = {}
 
     # Evaluate on validation before training
-    aggr_metrics_val, best_metrics, best_value = validate(val_evaluator, tensorboard_writer, config, best_metrics,
-                                                          best_value, epoch=0)
-    metrics_names, metrics_values = zip(*aggr_metrics_val.items())
-    metrics.append(list(metrics_values))
+    #aggr_metrics_val, best_metrics, best_value = validate(val_evaluator, tensorboard_writer, config, best_metrics,
+    #                                                      best_value, epoch=0)
+    #metrics_names, metrics_values = zip(*aggr_metrics_val.items())
+    #metrics.append(list(metrics_values))
 
     logger.info('Starting training...')
     for epoch in tqdm(range(start_epoch + 1, config["epochs"] + 1), desc='Training Epoch', leave=False):
