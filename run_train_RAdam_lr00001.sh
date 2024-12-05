@@ -1,6 +1,6 @@
 #!/bin/sh
 #SBATCH --mem=100GB
-#SBATCH --gres=gpu:tesla:3
+#SBATCH --gres=gpu:3
 #SBATCH --time=7-0
 #SBATCH -o logs/RAdam_out_lr.out
 #SBATCH -e logs/RAdam_lr.err
