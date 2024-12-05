@@ -23,7 +23,7 @@ def run_sub(sub):
     sort_idx = np.argsort(sub_files[:, 1].astype(int))
     files_sorted = sub_files[sort_idx, 0]
     cnt_ID = 0
-    arr_concat = np.array([])
+    arr_concat = []
     try:
         for f in tqdm.tqdm(files_sorted):#[-20:]:
             df = pd.read_parquet(os.path.join(PATH_PARQUET, f))
@@ -51,7 +51,7 @@ def run_sub(sub):
                 # sum elements in each column that is not None or NaN
                 column_sums = df_r_f.apply(lambda x: x.dropna().abs().sum())
                 # select the four columns with the highest sums
-                top_columns = column_sums.nlargest(4).index
+                top_columns = column_sums.nlargest(4).index.sort_values()
                 if (column_sums[top_columns] == 0).any():
                     continue
                 df_ = df_r_f[top_columns]
@@ -63,24 +63,29 @@ def run_sub(sub):
                     # print(t_high)
                     df_["ID"] = cnt_ID
                     cnt_ID += 1
-                    if cnt_ID > 65000:
+                    #if cnt_ID > 65000:
                         # stop both for loops and save
                         # throw exception
-                        raise Exception("More than 65000 samples")
+                    #    raise Exception("More than 65000 samples")
                     arr_ = np.array(df_.values)
-
-                    arr_ = (arr_ - arr_.mean(axis=0)) / arr_.std(axis=0)
-                    arr_ = arr_.astype(np.float16)[:-1,:]
-                    arr_[:, 4] = np.float16(cnt_ID)
-                    if arr_concat.size == 0:
-                        arr_concat = arr_
-                    else:
-                        arr_concat = np.concatenate((arr_concat, arr_))
+                    arr_norm = np.zeros([2500, 4])
+                    for i in range(10):
+                        arr_idx = arr_[i*250:(i+1)*250, :4]
+                        arr_norm[i*250:(i+1)*250, :4] = (arr_idx - arr_idx.mean(axis=0)) / arr_idx.std(axis=0)
+                    #arr_ = (arr_ - arr_.mean(axis=0)) / arr_.std(axis=0)
+                    arr_norm = arr_norm.astype(np.float16)#[:-1,:]
+                    #arr_[:, 4] = np.float16(cnt_ID)
+                    #if arr_concat.size == 0:
+                    #    arr_concat = arr_
+                    #else:
+                    #    arr_concat = np.concatenate((arr_concat, arr_))
+                    arr_concat.append(arr_norm)
                     #l_.append(df_.iloc[:-1, :]) # leave out next full sample
     except Exception as e:
         print(e)
     finally:
-        np.save(f"sub_{sub}.npy", arr_concat)
+        arr_save = np.array(arr_concat)
+        np.save(f"sub_{sub}.npy", arr_save)
     #yield df_r_f.index[-1], np.array(df_r_f).T
 
 if __name__ == "__main__":
@@ -90,17 +95,43 @@ if __name__ == "__main__":
         from joblib import Parallel, delayed
         Parallel(n_jobs=-1, verbose=10)(delayed(run_sub)(sub) for sub in subs)
     
+    WRITE_IND_FILE = True
+    if WRITE_IND_FILE:
+        PATH_ = "/Users/Timon/Documents/mvts_transformer/data"
+        files = [f for f in os.listdir(PATH_) if f.startswith("sub_") and f != "sub_ind.csv"]
+        d_subs = {}
+        id_cnt = 0
+        for file in files:
+            print(file)
+            
+            arr = np.load(os.path.join(PATH_, file))
+            if len(arr.shape) == 2:
+                arr_sub_stack = []
+                for i in range(10):
+                    arr_sub_stack.append(arr[:, i*250:(i+1)*250, :])
+                arr_sub_stack = np.concatenate(arr_sub_stack, axis=0)
+                np.save(os.path.join(PATH_, file), arr_sub_stack)
+            else:
+                arr_sub_stack = arr
+            #print(arr.shape)
+            d_subs[file[4:-4]] = arr_sub_stack.shape[0] + id_cnt
+            id_cnt += arr_sub_stack.shape[0]
+        df_ind = pd.DataFrame.from_dict(d_subs, orient="index")
+        df_ind.columns = ["id_cnt"]
+        df_ind.to_csv(os.path.join(PATH_, "sub_ind.csv"), header=False)
+        
     # read all npy files and concatenate them
-    arr_concat = np.array([])
-    for sub in subs:
-        arr_ = np.load(f"sub_{sub}.npy")
-        if arr_concat.size == 0:
-            arr_concat = arr_
-        else:
-            arr_concat = np.concatenate((arr_concat, arr_))
+    # no concat
+    # arr_concat = np.array([])
+    # for sub in subs:
+    #     arr_ = np.load(f"sub_{sub}.npy")
+    #     if arr_concat.size == 0:
+    #         arr_concat = arr_
+    #     else:
+    #         arr_concat = np.concatenate((arr_concat, arr_))
     # create an array with incrementing steps of 0.01, and repeat each value 250 times
     #NUM_TIMESERIES = arr_concat.shape[0] / 250
     #np.arange(0, NUM_TIMESERIES / 100, 0.01)
     #arr_concat[:, 4] = np.repeat(np.arange(0, 65, 0.1), 1000)
     
-    np.save("all_subs.npy", arr_concat[:, :4])
+    #np.save("all_subs.npy", arr_concat[:, :4])

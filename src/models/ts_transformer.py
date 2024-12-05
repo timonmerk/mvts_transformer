@@ -21,18 +21,18 @@ class _CustomDataParallel(nn.Module):
         except AttributeError:
             return getattr(self.model.module, name)
 
-def model_factory(config, data):
+def model_factory(config, feat_dim, max_seq_len):
     task = config['task']
     #feat_dim = data.feature_df.shape[1]  # dimensionality of data features
-    feat_dim = data.all_data.shape[1]
+    #feat_dim = data.all_data.shape[1]
     # data windowing is used when samples don't have a predefined length or the length is too long
-    max_seq_len = config['data_window_len'] if config['data_window_len'] is not None else config['max_seq_len']
-    if max_seq_len is None:
-        try:
-            max_seq_len = data.max_seq_len
-        except AttributeError as x:
-            print("Data class does not define a maximum sequence length, so it must be defined with the script argument `max_seq_len`")
-            raise x
+    # max_seq_len = config['data_window_len'] if config['data_window_len'] is not None else config['max_seq_len']
+    # if max_seq_len is None:
+    #     try:
+    #         max_seq_len = data.max_seq_len
+    #     except AttributeError as x:
+    #         print("Data class does not define a maximum sequence length, so it must be defined with the script argument `max_seq_len`")
+    #         raise x
 
     if (task == "imputation") or (task == "transduction"):
         if config['model'] == 'LINEAR':

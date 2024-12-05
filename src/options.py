@@ -41,9 +41,9 @@ class Options(object):
                                  help='Print batch info every this many batches')
         self.parser.add_argument('--gpu', type=str, default='0',
                                  help='GPU index, -1 for CPU')
-        self.parser.add_argument('--n_proc', type=int, default=11,
+        self.parser.add_argument('--n_proc', type=int, default=2,
                                  help='Number of processes for data loading/preprocessing. By default, equals num. of available cores.')
-        self.parser.add_argument('--num_workers', type=int, default=11,
+        self.parser.add_argument('--num_workers', type=int, default=0,
                                  help='dataloader threads. 0 for single-thread.')
         self.parser.add_argument('--seed',
                                  help='Seed used for splitting sets. None by default, set to an integer for reproducibility')
@@ -125,7 +125,7 @@ class Options(object):
                                  help=("Comma separated string of multiplicative factors to be applied to lr "
                                        "at corresponding steps specified in `lr_step`. If a single value is provided, "
                                        "it will be replicated to match the number of steps in `lr_step`."))
-        self.parser.add_argument('--batch_size', type=int, default=512,
+        self.parser.add_argument('--batch_size', type=int, default=256,
                                  help='Training batch size')
         self.parser.add_argument('--l2_reg', type=float, default=0,
                                  help='L2 weight regularization parameter')

@@ -468,7 +468,7 @@ class MyNewDataClass(BaseData):
         self.all_data = self.load_all_npy()
 
         # skip if not debug
-        #self.all_data = self.all_data[:10000]
+        self.all_data = self.all_data[:50000]
         RUN_NPY = False
         if RUN_NPY:
             self.all_IDs = np.arange(self.all_data.shape[0] // 250).astype(int)

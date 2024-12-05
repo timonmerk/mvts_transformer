@@ -1,18 +1,22 @@
 import numpy as np
 from torch.utils.data import Dataset
 import torch
+import pandas as pd
+import logging
+
+logger = logging.getLogger('__main__')
 
 
 class ImputationDataset(Dataset):
     """Dynamically computes missingness (noise) mask for each sample"""
 
-    def __init__(self, data, indices, mean_mask_length=3, masking_ratio=0.15,
+    def __init__(self, IDs, mean_mask_length=3, masking_ratio=0.15,
                  mode='separate', distribution='geometric', exclude_feats=None):
         super(ImputationDataset, self).__init__()
 
-        self.data = data  # this is a subclass of the BaseData class in data.py
-        self.IDs = indices  # list of data IDs, but also mapping between integer index and ID
-        self.feature_df = self.data.all_df.loc[self.IDs]
+        #self.data = data  # this is a subclass of the BaseData class in data.py
+        #self.IDs = indices  # list of data IDs, but also mapping between integer index and ID
+        #self.feature_df = self.data.all_df.loc[self.IDs]
         #self.all_data = self.data.all_data[self.IDs]
 
         # THIS should be times for the large array!
@@ -20,12 +24,23 @@ class ImputationDataset(Dataset):
         #self.ID_values = self.data.IDs[self.ID_indices]
         #self.all_data = self.data.all_data[self.ID_indices]
 
+        self.IDs = IDs
+        self.sub_ind = pd.read_csv("data/sub_ind.csv", header=None)
+        self.sub_ind.columns = ["sub", "id_cnt"]
+        self.cur_sub = None
+        self.data = None
+
         self.masking_ratio = masking_ratio
         self.mean_mask_length = mean_mask_length
         self.mode = mode
         self.distribution = distribution
         self.exclude_feats = exclude_feats
 
+    def get_sub(self, ind):
+        idx_sub = np.where(self.sub_ind["id_cnt"] > ind)[0][0]
+        return self.sub_ind["sub"][idx_sub]
+
+    
     def __getitem__(self, ind):
         """
         For a given integer index, returns the corresponding (seq_length, feat_dim) array and a noise mask of same shape
@@ -37,10 +52,28 @@ class ImputationDataset(Dataset):
             ID: ID of sample
         """
 
-        X = self.feature_df.loc[self.IDs[ind]].values  # (seq_length, feat_dim) array
+        # given the ID --> check first which file the ID is in
+        # save in a value cur_sub the respective file
+        # if it's not the subject, load the new file
+        # otherwise, just set X to self.sub_arr[idx] --> [250, 4]
+        #X = self.feature_df.loc[self.IDs[ind]].values  # (seq_length, feat_dim) array
         
         #X = self.data.all_data[np.where(np.isin(self.data.IDs, ind))[0]]#.astype(np.float64)
         #X = self.data.all_data[np.isin(self.data.IDs, ind)]
+
+        ind_data = self.IDs[ind]
+        sub_name = self.get_sub(ind_data)
+        if sub_name != self.cur_sub:
+            logger.info(f"Loading new subject: {sub_name}")
+            self.data = np.load(f"data/sub_{sub_name}.npy")
+            self.cur_sub = sub_name
+            idx_pre = int(self.sub_ind.query(f"sub == '{sub_name}'").index.values) - 1
+            if idx_pre < 0:
+                self.idx_subtract = 0
+            else:
+                self.idx_subtract = int(self.sub_ind["id_cnt"].iloc[idx_pre])
+        X = self.data[ind_data - self.idx_subtract]
+
         if len(X.shape) == 1:
             X = np.expand_dims(X, axis=1)
             

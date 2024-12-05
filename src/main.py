@@ -16,6 +16,8 @@ import os
 import sys
 import time
 import pickle
+import numpy as np
+import pandas as pd
 import json
 #import dill as pickle
 
@@ -32,6 +34,7 @@ from running import setup, pipeline_factory, validate, check_progress, NEG_METRI
 from utils import utils
 from datasets.data import data_factory, Normalizer
 from datasets.datasplit import split_dataset
+from datasets.dataset import ImputationDataset
 from models.ts_transformer import model_factory, _CustomDataParallel
 from models.loss import get_loss_module
 from optimizers import get_optimizer
@@ -65,64 +68,51 @@ def main(config):
     # Build data
     logger.info("Loading and preprocessing data ...")
     data_class = data_factory[config['data_class']]
-    my_data = data_class(config['data_dir'], pattern=config['pattern'], n_proc=config['n_proc'], limit_size=config['limit_size'], config=config)
+    #my_data = data_class(config['data_dir'], pattern=config['pattern'], n_proc=config['n_proc'], limit_size=config['limit_size'], config=config)
     validation_method = 'ShuffleSplit'
     labels = None
 
     # Split dataset
-    test_data = my_data
-    test_indices = None  # will be converted to empty list in `split_dataset`, if also test_set_ratio == 0
-    val_data = my_data
-    val_indices = []
-    if config['test_pattern']:  # used if test data come from different files / file patterns
-        test_data = data_class(config['data_dir'], pattern=config['test_pattern'], n_proc=-1, config=config)
-        test_indices = test_data.all_IDs
-    if config['test_from']:  # load test IDs directly from file, if available, otherwise use `test_set_ratio`. Can work together with `test_pattern`
-        test_indices = list(set([line.rstrip() for line in open(config['test_from']).readlines()]))
-        try:
-            test_indices = [int(ind) for ind in test_indices]  # integer indices
-        except ValueError:
-            pass  # in case indices are non-integers
-        logger.info("Loaded {} test IDs from file: '{}'".format(len(test_indices), config['test_from']))
-    if config['val_pattern']:  # used if val data come from different files / file patterns
-        val_data = data_class(config['data_dir'], pattern=config['val_pattern'], n_proc=-1, config=config)
-        val_indices = val_data.all_IDs
+    #test_data = my_data
 
-    # Note: currently a validation set must exist, either with `val_pattern` or `val_ratio`
-    # Using a `val_pattern` means that `val_ratio` == 0 and `test_ratio` == 0
-    if config['val_ratio'] > 0:
-        train_indices, val_indices, test_indices = split_dataset(data_indices=my_data.all_IDs,
-                                                                 validation_method=validation_method,
-                                                                 n_splits=1,
-                                                                 validation_ratio=config['val_ratio'],
-                                                                 test_set_ratio=config['test_ratio'],  # used only if test_indices not explicitly specified
-                                                                 test_indices=test_indices,
-                                                                 random_seed=1337,
-                                                                 labels=labels)
-        train_indices = train_indices[0]  # `split_dataset` returns a list of indices *per fold/split*
-        val_indices = val_indices[0]  # `split_dataset` returns a list of indices *per fold/split*
-    else:
-        train_indices = my_data.all_IDs
-        if test_indices is None:
-            test_indices = []
+    val_indices = []
+
+    df_ind = pd.read_csv("data/sub_ind.csv", header=None)
+    df_ind.columns = ["sub", "id_cnt"]
+    val_sub = ["rcs02l", "rcs20r"]
+    val_indices = []
+    train_indices = []
+    for sub_idx, sub in enumerate(df_ind["sub"]):
+        ind_sub = df_ind[df_ind["sub"] == sub]
+        if sub_idx == 0:
+            pre_start = 0
+        else:
+            pre_start = df_ind.iloc[sub_idx-1].id_cnt
+        if sub in val_sub:
+            val_indices.append(np.arange(pre_start, ind_sub.id_cnt.values[0]))
+        else:
+            train_indices.append(np.arange(pre_start, ind_sub.id_cnt.values[0]))
+    train_indices = np.concatenate(train_indices)
+    val_indices = np.concatenate(val_indices)  
+
 
     logger.info("{} samples may be used for training".format(len(train_indices)))
     logger.info("{} samples will be used for validation".format(len(val_indices)))
-    logger.info("{} samples will be used for testing".format(len(test_indices)))
+  #logger.info("{} samples will be used for testing".format(en(test_indices)))
 
-    with open(os.path.join(config['output_dir'], 'data_indices.json'), 'w') as f:
-        try:
-            json.dump({'train_indices': list(map(int, train_indices)),
-                       'val_indices': list(map(int, val_indices)),
-                       'test_indices': list(map(int, test_indices))}, f, indent=4)
-        except ValueError:  # in case indices are non-integers
-            json.dump({'train_indices': list(train_indices),
-                       'val_indices': list(val_indices),
-                       'test_indices': list(test_indices)}, f, indent=4)
+    # with open(os.path.join(config['output_dir'], 'data_indices.json'), 'w') as f:
+    #     try:
+    #         json.dump({'train_indices': list(map(int, train_indices)),
+    #                    'val_indices': list(map(int, val_indices)),
+    #                    'test_indices': list(map(int, test_indices))}, f, indent=4)
+    #     except ValueError:  # in case indices are non-integers
+    #         json.dump({'train_indices': list(train_indices),
+    #                    'val_indices': list(val_indices),
+    #                    'test_indices': list(test_indices)}, f, indent=4)
 
     # Create model
     logger.info("Creating model ...")
-    model = model_factory(config, my_data)
+    model = model_factory(config, 4, 250)
 
     if torch.cuda.device_count() > 1:
         logger.info("Using {} GPUs!".format(torch.cuda.device_count()))
@@ -138,9 +128,6 @@ def main(config):
     logger.info("Model:\n{}".format(model))
     logger.info("Total number of parameters: {}".format(utils.count_parameters(model)))
     logger.info("Trainable parameters: {}".format(utils.count_parameters(model, trainable=True)))
-
-
-    # Initialize optimizer
 
     if config['global_reg']:
         weight_decay = config['l2_reg']
@@ -168,7 +155,8 @@ def main(config):
 
     # Initialize data generators
     dataset_class, collate_fn, runner_class = pipeline_factory(config)
-    val_dataset = dataset_class(val_data, val_indices)
+    val_dataset = ImputationDataset(IDs=val_indices, **dataset_class.keywords)
+    #dataset_class(val_data, val_indices)
 
     val_loader = DataLoader(dataset=val_dataset,
                             batch_size=config['batch_size'],
@@ -177,11 +165,13 @@ def main(config):
                             pin_memory=True,
                             collate_fn=lambda x: collate_fn(x, max_len=model.max_len))
 
-    train_dataset = dataset_class(my_data, train_indices)
+    #train_dataset = dataset_class(my_data, train_indices)
+    train_dataset = ImputationDataset(IDs=train_indices, **dataset_class.keywords)
+
 
     train_loader = DataLoader(dataset=train_dataset,
                               batch_size=config['batch_size'],
-                              shuffle=True,
+                              shuffle=False,
                               num_workers=config['num_workers'],
                               pin_memory=True,
                               collate_fn=lambda x: collate_fn(x, max_len=model.max_len))
@@ -198,10 +188,10 @@ def main(config):
     best_metrics = {}
 
     # Evaluate on validation before training
-    #aggr_metrics_val, best_metrics, best_value = validate(val_evaluator, tensorboard_writer, config, best_metrics,
-    #                                                      best_value, epoch=0)
-    #metrics_names, metrics_values = zip(*aggr_metrics_val.items())
-    #metrics.append(list(metrics_values))
+    aggr_metrics_val, best_metrics, best_value = validate(val_evaluator, tensorboard_writer, config, best_metrics,
+                                                          best_value, epoch=0)
+    metrics_names, metrics_values = zip(*aggr_metrics_val.items())
+    metrics.append(list(metrics_values))
 
     logger.info('Starting training...')
     for epoch in tqdm(range(start_epoch + 1, config["epochs"] + 1), desc='Training Epoch', leave=False):
