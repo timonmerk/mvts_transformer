@@ -43,7 +43,7 @@ class Options(object):
                                  help='GPU index, -1 for CPU')
         self.parser.add_argument('--n_proc', type=int, default=2,
                                  help='Number of processes for data loading/preprocessing. By default, equals num. of available cores.')
-        self.parser.add_argument('--num_workers', type=int, default=10,
+        self.parser.add_argument('--num_workers', type=int, default=3,
                                  help='dataloader threads. 0 for single-thread.')
         self.parser.add_argument('--seed',
                                  help='Seed used for splitting sets. None by default, set to an integer for reproducibility')
