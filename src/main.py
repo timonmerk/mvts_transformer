@@ -143,6 +143,7 @@ def main(config):
     lr_step = 0  # current step index of `lr_step`
     lr = config['lr']  # current learning step
     # Load model and optimizer state
+    #args.load_model = "output/Adam/checkpoints/model_last.pth"
     if args.load_model:
         model, optimizer, start_epoch = utils.load_model(model, config['load_model'], optimizer, config['resume'],
                                                          config['change_output'],

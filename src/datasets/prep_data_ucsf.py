@@ -24,6 +24,7 @@ def run_sub(sub):
     files_sorted = sub_files[sort_idx, 0]
     cnt_ID = 0
     arr_concat = []
+    time_stamps = []
     try:
         for f in tqdm.tqdm(files_sorted):#[-20:]:
             df = pd.read_parquet(os.path.join(PATH_PARQUET, f))
@@ -68,34 +69,38 @@ def run_sub(sub):
                         # throw exception
                     #    raise Exception("More than 65000 samples")
                     arr_ = np.array(df_.values)
-                    arr_norm = np.zeros([2500, 4])
+                    #arr_norm = np.zeros([2500, 4])
                     for i in range(10):
                         arr_idx = arr_[i*250:(i+1)*250, :4]
-                        arr_norm[i*250:(i+1)*250, :4] = (arr_idx - arr_idx.mean(axis=0)) / arr_idx.std(axis=0)
+                        #arr_norm[i*250:(i+1)*250, :4] = (arr_idx - arr_idx.mean(axis=0)) / arr_idx.std(axis=0)
+                        arr_norm= (arr_idx - arr_idx.mean(axis=0)) / arr_idx.std(axis=0)
+                        arr_concat.append(arr_norm.astype(np.float16))
+                        time_stamps.append(t_low + pd.Timedelta(i, "s"))
                     #arr_ = (arr_ - arr_.mean(axis=0)) / arr_.std(axis=0)
-                    arr_norm = arr_norm.astype(np.float16)#[:-1,:]
+                    #arr_norm = arr_norm.astype(np.float16)#[:-1,:]
                     #arr_[:, 4] = np.float16(cnt_ID)
                     #if arr_concat.size == 0:
                     #    arr_concat = arr_
                     #else:
                     #    arr_concat = np.concatenate((arr_concat, arr_))
-                    arr_concat.append(arr_norm)
+                    #arr_concat.append(arr_norm)
                     #l_.append(df_.iloc[:-1, :]) # leave out next full sample
     except Exception as e:
         print(e)
     finally:
         arr_save = np.array(arr_concat)
         np.save(f"sub_{sub}.npy", arr_save)
+        pd.DataFrame(time_stamps).to_csv(f"sub_{sub}_time_stamps.csv", header=False, index=False)
     #yield df_r_f.index[-1], np.array(df_r_f).T
 
 if __name__ == "__main__":
-    #run_sub(subs[0])
-    ESTIMATE_NPY = False
+    #run_sub("rcs02r")
+    ESTIMATE_NPY = True
     if ESTIMATE_NPY:
         from joblib import Parallel, delayed
         Parallel(n_jobs=-1, verbose=10)(delayed(run_sub)(sub) for sub in subs)
     
-    WRITE_IND_FILE = True
+    WRITE_IND_FILE = False
     if WRITE_IND_FILE:
         PATH_ = "/Users/Timon/Documents/mvts_transformer/data"
         files = [f for f in os.listdir(PATH_) if f.startswith("sub_") and f != "sub_ind.csv"]
