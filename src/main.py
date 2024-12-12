@@ -42,6 +42,16 @@ import multiprocessing
 
 
 def main(config):
+
+    # config debug
+    #config["lr"] = 0.00001 --batch_size 2056 --optimizer RAdam --masking_ratio 0.1 --mean_mask_length 10 --mask_mode separate --num_workers 3 --max_seq_len 25
+    # config["batch_size"] = 20
+    # config["optimizer"] = "RAdam"
+    # config["masking_ratio"] = 0.1
+    # config["mean_mask_length"] = 10
+    # config["mask_mode"] = "concurrent"
+    # config["num_workers"] = 3
+    # config["max_seq_len"] = 250
     multiprocessing.set_start_method('fork', force=True)
     total_epoch_time = 0
     total_eval_time = 0
@@ -116,8 +126,8 @@ def main(config):
     if max_seq_len == 250:
         feature_dim = 4
     else:
-        feature_dim = 25
-    model = model_factory(config, max_seq_len, feature_dim)  # 4, 250 or 40, 25
+        feature_dim = 40
+    model = model_factory(config, feature_dim, max_seq_len)  # 4, 250 or 40, 25
 
     if torch.cuda.device_count() > 1:
         logger.info("Using {} GPUs!".format(torch.cuda.device_count()))
