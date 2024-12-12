@@ -1,6 +1,6 @@
 #!/bin/sh
 #SBATCH --mem=100GB
-#SBATCH --gres=gpu:3
+#SBATCH --gres=gpu:A40:3
 #SBATCH --time=7-0
 #SBATCH --cpus-per-task=4
 #SBATCH -o logs/250.out
