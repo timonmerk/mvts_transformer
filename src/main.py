@@ -112,7 +112,12 @@ def main(config):
 
     # Create model
     logger.info("Creating model ...")
-    model = model_factory(config, 4, 250)
+    max_seq_len = config['max_seq_len']
+    if max_seq_len == 250:
+        feature_dim = 4
+    else:
+        feature_dim = 25
+    model = model_factory(config, max_seq_len, feature_dim)  # 4, 250 or 40, 25
 
     if torch.cuda.device_count() > 1:
         logger.info("Using {} GPUs!".format(torch.cuda.device_count()))
@@ -143,7 +148,8 @@ def main(config):
     lr_step = 0  # current step index of `lr_step`
     lr = config['lr']  # current learning step
     # Load model and optimizer state
-    #args.load_model = "output/Adam/checkpoints/model_last.pth"
+    args.load_model = False#"output/lr_00001/checkpoints/model_last.pth"
+    config['resume'] = False
     if args.load_model:
         model, optimizer, start_epoch = utils.load_model(model, config['load_model'], optimizer, config['resume'],
                                                          config['change_output'],
@@ -156,7 +162,7 @@ def main(config):
 
     # Initialize data generators
     dataset_class, collate_fn, runner_class = pipeline_factory(config)
-    val_dataset = ImputationDataset(IDs=val_indices, **dataset_class.keywords)
+    val_dataset = ImputationDataset(IDs=val_indices, max_seq_len=max_seq_len, **dataset_class.keywords)
     #dataset_class(val_data, val_indices)
 
     val_loader = DataLoader(dataset=val_dataset,
@@ -167,7 +173,7 @@ def main(config):
                             collate_fn=lambda x: collate_fn(x, max_len=model.max_len))
 
     #train_dataset = dataset_class(my_data, train_indices)
-    train_dataset = ImputationDataset(IDs=train_indices, **dataset_class.keywords)
+    train_dataset = ImputationDataset(IDs=train_indices, max_seq_len=max_seq_len, **dataset_class.keywords)
 
 
     train_loader = DataLoader(dataset=train_dataset,
@@ -189,10 +195,10 @@ def main(config):
     best_metrics = {}
 
     # Evaluate on validation before training
-    aggr_metrics_val, best_metrics, best_value = validate(val_evaluator, tensorboard_writer, config, best_metrics,
-                                                          best_value, epoch=0)
-    metrics_names, metrics_values = zip(*aggr_metrics_val.items())
-    metrics.append(list(metrics_values))
+    #aggr_metrics_val, best_metrics, best_value = validate(val_evaluator, tensorboard_writer, config, best_metrics,
+    #                                                      best_value, epoch=0)
+    #metrics_names, metrics_values = zip(*aggr_metrics_val.items())
+    #metrics.append(list(metrics_values))
 
     logger.info('Starting training...')
     for epoch in tqdm(range(start_epoch + 1, config["epochs"] + 1), desc='Training Epoch', leave=False):

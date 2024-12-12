@@ -10,7 +10,7 @@ logger = logging.getLogger('__main__')
 class ImputationDataset(Dataset):
     """Dynamically computes missingness (noise) mask for each sample"""
 
-    def __init__(self, IDs, mean_mask_length=3, masking_ratio=0.15,
+    def __init__(self, IDs, max_seq_len=250, mean_mask_length=3, masking_ratio=0.15,
                  mode='separate', distribution='geometric', exclude_feats=None):
         super(ImputationDataset, self).__init__()
 
@@ -25,6 +25,7 @@ class ImputationDataset(Dataset):
         #self.all_data = self.data.all_data[self.ID_indices]
 
         self.IDs = IDs
+        self.max_seq_len = max_seq_len
         self.sub_ind = pd.read_csv("data/sub_ind.csv", header=None)
         self.sub_ind.columns = ["sub", "id_cnt"]
         self.cur_sub = None
@@ -74,6 +75,9 @@ class ImputationDataset(Dataset):
                 self.idx_subtract = int(self.sub_ind["id_cnt"].iloc[idx_pre])
         X = self.data[ind_data - self.idx_subtract]
 
+        if self.max_seq_len == 25:
+            X = X.reshape((25, 40))
+        # else stay with 250
         if len(X.shape) == 1:
             X = np.expand_dims(X, axis=1)
             

@@ -218,7 +218,7 @@ class TSTransformerEncoder(nn.Module):
         self.max_len = max_len
         self.d_model = d_model
         self.n_heads = n_heads
-
+        # add here wavelet or convnet 
         self.project_inp = nn.Linear(feat_dim, d_model)
         self.pos_enc = get_pos_encoder(pos_encoding)(d_model, dropout=dropout*(1.0 - freeze), max_len=max_len)
 

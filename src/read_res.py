@@ -8,7 +8,7 @@ from running import setup
 import os
 from copy import deepcopy
 import pandas as pd
-import umap
+#import umap
 
 
 args = Options().parse()  # `argsparse` object
@@ -21,7 +21,7 @@ class FeatureExtractor:
     def __call__(self, module, input_, output):
         self.extracted_features = output
 
-PATH_BASE = '/Users/Timon/Documents/mvts_transformer/output/Adam_2024-12-06_14-07-27_KFi (1)'
+PATH_BASE = '/Users/Timon/Documents/mvts_transformer/output/Adam'
 MODEL_PATH = os.path.join(PATH_BASE, 'checkpoints', 'model_best.pth')
 PATH_PREDICTIONS = os.path.join(PATH_BASE, 'predictions', 'best_predictions.pickle')
 sub = "rcs02r"
@@ -60,12 +60,20 @@ for i in np.arange(0, test_data.shape[0]-num_run, num_run):
     model_extracted_features = extractor.extracted_features.detach().numpy()
     model_extracted_features_mean = model_extracted_features.mean(axis=0)
     res_tr_out.append(model_extracted_features_mean)
+    if i % 10000 == 0 and i > 0:
+        res_all = np.concatenate(res_tr_out)
+        np.save(f"data/res_umap_rcs_02r_{i}.npy", res_all)
+        res_tr_out = []
 
-res_all = np.concatenate(res_tr_out)
-np.save("data/res_umap_rcs_02r.npy", res_all)
+LOAD_ALL = True
+if LOAD_ALL:
+    res_all = []
+    for i in np.arange(10000, 100000, 10000):
+        res_all.append(np.load(f"data/res_umap_rcs_02r_{i}.npy"))
+    res_all = np.concatenate(res_all)
 
 from sklearn.manifold import TSNE
-tsne_model = TSNE(n_components=2, random_state=42, perplexity=20, n_iter=500, verbose=1)
+tsne_model = TSNE(n_components=2, random_state=42, perplexity=50, n_iter=10000, verbose=1)
 data_2d = tsne_model.fit_transform(res_all)
 
 

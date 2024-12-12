@@ -111,7 +111,7 @@ class Options(object):
         self.parser.add_argument('--harden', action='store_true',
                                  help='Makes training objective progressively harder, by masking more of the input')
 
-        self.parser.add_argument('--epochs', type=int, default=400,
+        self.parser.add_argument('--epochs', type=int, default=50000,
                                  help='Number of training epochs')
         self.parser.add_argument('--val_interval', type=int, default=2,
                                  help='Evaluate on validation set every this many epochs. Must be >= 1.')
@@ -146,13 +146,13 @@ class Options(object):
                                  help="""Used instead of the `max_seq_len`, when the data samples must be
                                  segmented into windows. Determines maximum input sequence length 
                                  (size of transformer layers).""")
-        self.parser.add_argument('--d_model', type=int, default=128,
+        self.parser.add_argument('--d_model', type=int, default=2048,
                                  help='Internal dimension of transformer embeddings')
-        self.parser.add_argument('--dim_feedforward', type=int, default=256,
+        self.parser.add_argument('--dim_feedforward', type=int, default=3072,
                                  help='Dimension of dense feedforward part of transformer layer')
         self.parser.add_argument('--num_heads', type=int, default=16,
                                  help='Number of multi-headed attention heads')
-        self.parser.add_argument('--num_layers', type=int, default=3,
+        self.parser.add_argument('--num_layers', type=int, default=12,
                                  help='Number of transformer encoder layers (blocks)')
         self.parser.add_argument('--dropout', type=float, default=0.1,
                                  help='Dropout applied to most transformer encoder layers')
