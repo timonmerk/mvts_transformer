@@ -44,7 +44,7 @@ def model_factory(config, feat_dim, max_seq_len):
             return TSTransformerEncoder(feat_dim, max_seq_len, config['d_model'], config['num_heads'],
                                         config['num_layers'], config['dim_feedforward'], dropout=config['dropout'],
                                         pos_encoding=config['pos_encoding'], activation=config['activation'],
-                                        norm=config['normalization_layer'], freeze=config['freeze'])
+                                        norm=config['normalization_layer'], freeze=config['freeze'], concat_fft=config['concat_fft'])
 
     if (task == "classification") or (task == "regression"):
         num_labels = len(data.class_names) if task == "classification" else data.labels_df.shape[1]  # dimensionality of labels
@@ -220,7 +220,7 @@ def _weights_init(m):
 
 class TSTransformerEncoder(nn.Module):
 
-    def __init__(self, feat_dim, max_len, d_model, n_heads, num_layers, dim_feedforward, power_dim=250, dropout=0.1,
+    def __init__(self, feat_dim, max_len, d_model, n_heads, num_layers, dim_feedforward, power_dim=250, concat_fft=True, dropout=0.1,
                  pos_encoding='fixed', activation='gelu', norm='BatchNorm', freeze=False):
         super(TSTransformerEncoder, self).__init__()
 
@@ -229,8 +229,12 @@ class TSTransformerEncoder(nn.Module):
         self.n_heads = n_heads
         self.power_dim = power_dim   # the power dimension equals the seq-len
         # add here wavelet or convnet
-        self.project_inp = nn.Linear(feat_dim, d_model // 2)
-        self.project_inp_f = nn.Linear(feat_dim, d_model // 2)
+        self.concat_fft = concat_fft
+        if self.concat_fft:
+            self.project_inp = nn.Linear(feat_dim, d_model // 2)
+            self.project_inp_f = nn.Linear(feat_dim, d_model // 2)
+        else:
+            self.project_inp = nn.Linear(feat_dim, d_model)
         self.pos_enc = get_pos_encoder(pos_encoding)(d_model, dropout=dropout*(1.0 - freeze), max_len=max_len)
 
         if norm == 'LayerNorm':
@@ -266,18 +270,19 @@ class TSTransformerEncoder(nn.Module):
         inp = self.project_inp(inp) * math.sqrt(
             self.d_model)  # [seq_length, batch_size, d_model] project input vectors to d_model dimensional space
         
-        # do a fft on the X signal
-        X_fft = torch.transpose(torch.fft.fft(X, dim=1).abs(), 0, 1)
-        #from matplotlib import pyplot as plt
-        #fft_ = X_fft.detach().cpu().numpy()
-        #plt.plot(fft_[0, :, :])
-        #plt.show(block=True)
-        
+        if self.concat_fft:
+            # do a fft on the X signal
+            X_fft = torch.transpose(torch.fft.fft(X, dim=1).abs(), 0, 1)
+            #from matplotlib import pyplot as plt
+            #fft_ = X_fft.detach().cpu().numpy()
+            #plt.plot(fft_[0, :, :])
+            #plt.show(block=True)
+            
 
-        inp_f = self.project_inp_f(X_fft)
+            inp_f = self.project_inp_f(X_fft)
 
-        # concatenate the two inputs
-        inp = torch.cat((inp, inp_f), 2)
+            # concatenate the two inputs
+            inp = torch.cat((inp, inp_f), 2)
 
         inp = self.pos_enc(inp)  # add positional encoding
         # NOTE: logic for padding masks is reversed to comply with definition in MultiHeadAttention, TransformerEncoderLayer

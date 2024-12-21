@@ -128,6 +128,10 @@ def main(config):
         feature_dim = 4
     else:
         feature_dim = 40
+    
+    print("CONCAT_FFT")
+    print(config["concat_fft"])
+    print(type(config["concat_fft"]))
     model = model_factory(config, feature_dim, max_seq_len)  # 4, 250 or 40, 25
 
     if torch.cuda.device_count() > 1:
@@ -159,6 +163,7 @@ def main(config):
         scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=config["lr"], steps_per_epoch=10, epochs=config["epochs"])
     else:
         scheduler = None
+
     start_epoch = 0
     lr_step = 0  # current step index of `lr_step`
     lr = config['lr']  # current learning step
@@ -212,10 +217,10 @@ def main(config):
     best_metrics = {}
 
     # Evaluate on validation before training
-    aggr_metrics_val, best_metrics, best_value = validate(val_evaluator, tensorboard_writer, config, best_metrics,
-                                                         best_value, epoch=0)
-    metrics_names, metrics_values = zip(*aggr_metrics_val.items())
-    metrics.append(list(metrics_values))
+    # aggr_metrics_val, best_metrics, best_value = validate(val_evaluator, tensorboard_writer, config, best_metrics,
+    #                                                      best_value, epoch=0)
+    # metrics_names, metrics_values = zip(*aggr_metrics_val.items())
+    # metrics.append(list(metrics_values))
 
     logger.info('Starting training...')
     for epoch in tqdm(range(start_epoch + 1, config["epochs"] + 1), desc='Training Epoch', leave=False):

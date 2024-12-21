@@ -377,15 +377,11 @@ class UnsupervisedRunner(BaseRunner):
 
             # Zero gradients, perform a backward pass, and update the weights.
             self.optimizer.zero_grad()
-            if self.scheduler is not None:
-                self.scheduler.step()
             total_loss.backward()
 
             # torch.nn.utils.clip_grad_value_(self.model.parameters(), clip_value=1.0)
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=4.0)
             self.optimizer.step()
-            if self.scheduler is not None:
-                self.scheduler.step()
 
             metrics = {"loss": mean_loss.item()}
             if i % self.print_interval == 0:
@@ -402,6 +398,8 @@ class UnsupervisedRunner(BaseRunner):
         epoch_loss = epoch_loss / total_active_elements  # average loss per element for whole epoch
         self.epoch_metrics['epoch'] = epoch_num
         self.epoch_metrics['loss'] = epoch_loss
+        if self.scheduler is not None:
+            self.scheduler.step()
         return self.epoch_metrics
 
     def evaluate(self, epoch_num=None, keep_all=True, extract_model_features=False):
