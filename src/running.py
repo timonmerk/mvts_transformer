@@ -212,7 +212,7 @@ def validate(val_evaluator, tensorboard_writer, config, best_metrics, best_value
     print()
     print_str = 'Epoch {} Validation Summary: '.format(epoch)
     for k, v in aggr_metrics.items():
-        tensorboard_writer.add_scalar('{}/val'.format(k), v, epoch)
+        tensorboard_writer.add_scalar('{}/val'.format(k), v, epoch-1)
         print_str += '{}: {:8f} | '.format(k, v)
     logger.info(print_str)
 
@@ -287,12 +287,13 @@ def check_progress(epoch):
 
 class BaseRunner(object):
 
-    def __init__(self, model, dataloader, device, loss_module, optimizer=None, l2_reg=None, print_interval=10, console=True):
+    def __init__(self, model, dataloader, device, loss_module, optimizer=None, scheduler=None, l2_reg=None, print_interval=10, console=True):
 
         self.model = model
         self.dataloader = dataloader
         self.device = device
         self.optimizer = optimizer
+        self.scheduler = scheduler
         self.loss_module = loss_module
         self.l2_reg = l2_reg
         self.print_interval = print_interval
@@ -376,16 +377,23 @@ class UnsupervisedRunner(BaseRunner):
 
             # Zero gradients, perform a backward pass, and update the weights.
             self.optimizer.zero_grad()
+            if self.scheduler is not None:
+                self.scheduler.step()
             total_loss.backward()
 
             # torch.nn.utils.clip_grad_value_(self.model.parameters(), clip_value=1.0)
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=4.0)
             self.optimizer.step()
+            if self.scheduler is not None:
+                self.scheduler.step()
 
             metrics = {"loss": mean_loss.item()}
             if i % self.print_interval == 0:
                 ending = "" if epoch_num is None else 'Epoch {} '.format(epoch_num)
                 self.print_callback(i, metrics, prefix='Training ' + ending)
+                # Log batch-wise loss and learning rate to tensorboard
+                self.tensorboard_writer.add_scalar('batch_loss/train', mean_loss.item(), (epoch_num - 1) * len(self.dataloader) + i)
+                self.tensorboard_writer.add_scalar('learning_rate', self.optimizer.param_groups[0]['lr'], (epoch_num - 1) * len(self.dataloader) + i)
 
             with torch.no_grad():
                 total_active_elements += len(loss)
@@ -447,6 +455,8 @@ class UnsupervisedRunner(BaseRunner):
             if i % self.print_interval == 0:
                 ending = "" if epoch_num is None else 'Epoch {} '.format(epoch_num)
                 self.print_callback(i, metrics, prefix='Evaluating ' + ending)
+                # Log batch-wise loss to tensorboard
+                self.tensorboard_writer.add_scalar('batch_loss/val', mean_loss, (epoch_num - 1) * len(self.dataloader) + i)
 
             total_active_elements += len(loss)
             epoch_loss += batch_loss  # add total loss of batch

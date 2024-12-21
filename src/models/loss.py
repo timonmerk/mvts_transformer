@@ -6,9 +6,15 @@ from torch.nn import functional as F
 def get_loss_module(config):
 
     task = config['task']
+    loss_config = config['loss']
 
     if (task == "imputation") or (task == "transduction"):
-        return MaskedMSELoss(reduction='none')  # outputs loss for each batch element
+        if loss_config == "MSE":
+            return MaskedMSELoss(reduction='none')  # outputs loss for each batch element
+        elif loss_config == "FrequencyLoss":
+            return FrequencyLoss(reduction='none')
+        elif loss_config == "MAE":
+            return MaskedMAELoss(reduction='none')
 
     if task == "classification":
         return NoFussCrossEntropyLoss(reduction='none')  # outputs loss for each batch sample
@@ -72,3 +78,79 @@ class MaskedMSELoss(nn.Module):
         masked_true = torch.masked_select(y_true, mask)
 
         return self.mse_loss(masked_pred, masked_true)
+
+class MaskedMAELoss(nn.Module):
+    """ Masked MSE Loss
+    """
+
+    def __init__(self, reduction: str = 'mean'):
+
+        super().__init__()
+
+        self.reduction = reduction
+        self.mae_loss = nn.L1Loss(reduction=self.reduction)
+        
+
+    def forward(self,
+                y_pred: torch.Tensor, y_true: torch.Tensor, mask: torch.BoolTensor) -> torch.Tensor:
+        """Compute the loss between a target value and a prediction.
+
+        Args:
+            y_pred: Estimated values
+            y_true: Target values
+            mask: boolean tensor with 0s at places where values should be ignored and 1s where they should be considered
+
+        Returns
+        -------
+        if reduction == 'none':
+            (num_active,) Loss for each active batch element as a tensor with gradient attached.
+        if reduction == 'mean':
+            scalar mean loss over batch as a tensor with gradient attached.
+        """
+
+        # for this particular loss, one may also elementwise multiply y_pred and y_true with the inverted mask
+        masked_pred = torch.masked_select(y_pred, mask)
+        masked_true = torch.masked_select(y_true, mask)
+
+        return self.mae_loss(masked_pred, masked_true)
+
+
+class FrequencyLoss(nn.Module):
+    """ Masked MSE Loss
+    """
+
+    def __init__(self, reduction: str = 'mean'):
+
+        super().__init__()
+
+        self.reduction = reduction
+        self.mse_loss = nn.MSELoss(reduction=self.reduction)
+
+    def forward(self,
+                y_pred: torch.Tensor, y_true: torch.Tensor, mask: torch.BoolTensor) -> torch.Tensor:
+        """Compute the loss between a target value and a prediction.
+
+        Args:
+            y_pred: Estimated values
+            y_true: Target values
+            mask: boolean tensor with 0s at places where values should be ignored and 1s where they should be considered
+
+        Returns
+        -------
+        if reduction == 'none':
+            (num_active,) Loss for each active batch element as a tensor with gradient attached.
+        if reduction == 'mean':
+            scalar mean loss over batch as a tensor with gradient attached.
+        """
+
+        # for this particular loss, one may also elementwise multiply y_pred and y_true with the inverted mask
+
+        # there should be only a single sequence masked in the batch
+        masked_pred = torch.masked_select(y_pred, mask)
+        masked_true = torch.masked_select(y_true, mask)
+
+        # compute here the fft of both masks and return the difference as loss
+        diff = torch.fft(masked_pred) - torch.fft(masked_true)
+        return torch.sum(diff)
+
+        #return self.mse_loss(masked_pred, masked_true)

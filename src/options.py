@@ -111,11 +111,12 @@ class Options(object):
         self.parser.add_argument('--harden', action='store_true',
                                  help='Makes training objective progressively harder, by masking more of the input')
 
-        self.parser.add_argument('--epochs', type=int, default=50000,
+        self.parser.add_argument('--epochs', type=int, default=200,
                                  help='Number of training epochs')
         self.parser.add_argument('--val_interval', type=int, default=2,
                                  help='Evaluate on validation set every this many epochs. Must be >= 1.')
-        self.parser.add_argument('--optimizer', choices={"Adam", "RAdam"}, default="RAdam", help="Optimizer")
+        self.parser.add_argument('--optimizer', choices={"Adam", "RAdam", "AdamW"}, default="RAdam", help="Optimizer")
+        self.parser.add_argument('--scheduler', choices={"OneCycleLR", "None"}, default="OneCycleLR")
         self.parser.add_argument('--lr', type=float, default=1e-3,
                                  help='learning rate (default holds for batch size 64)')
         self.parser.add_argument('--lr_step', type=str, default='1000000',
@@ -133,6 +134,7 @@ class Options(object):
                                  help='If set, L2 regularization will be applied to all weights instead of only the output layer')
         self.parser.add_argument('--key_metric', choices={'loss', 'accuracy', 'precision'}, default='loss',
                                  help='Metric used for defining best epoch')
+        self.parser.add_argument('--loss', type=str, choices={"MSE", "MAE", "FrequencyLoss"}, default="MAE", )
         self.parser.add_argument('--freeze', action='store_true',
                                  help='If set, freezes all layer parameters except for the output layer. Also removes dropout except before the output layer')
 
@@ -141,18 +143,18 @@ class Options(object):
                                  help="Model class")
         self.parser.add_argument('--max_seq_len', type=int,
                                  help="""Maximum input sequence length. Determines size of transformer layers.
-                                 If not provided, then the value defined inside the data class will be used.""")
+                                 If not provided, then the value defined inside the data class will be used.""", default=250)
         self.parser.add_argument('--data_window_len', type=int,
                                  help="""Used instead of the `max_seq_len`, when the data samples must be
                                  segmented into windows. Determines maximum input sequence length 
                                  (size of transformer layers).""")
-        self.parser.add_argument('--d_model', type=int, default=2048,
+        self.parser.add_argument('--d_model', type=int, default=256,  # 512
                                  help='Internal dimension of transformer embeddings')
-        self.parser.add_argument('--dim_feedforward', type=int, default=3072,
+        self.parser.add_argument('--dim_feedforward', type=int, default=512,  # 1536
                                  help='Dimension of dense feedforward part of transformer layer')
-        self.parser.add_argument('--num_heads', type=int, default=16,
+        self.parser.add_argument('--num_heads', type=int, default=8,
                                  help='Number of multi-headed attention heads')
-        self.parser.add_argument('--num_layers', type=int, default=12,
+        self.parser.add_argument('--num_layers', type=int, default=6,
                                  help='Number of transformer encoder layers (blocks)')
         self.parser.add_argument('--dropout', type=float, default=0.1,
                                  help='Dropout applied to most transformer encoder layers')

@@ -33,6 +33,7 @@ def map_sub(sub):
     idx_not_none = df_pkg_mapped.iloc[:, 0].notnull()
     df_pkg_mapped_not_none = df_pkg_mapped.loc[idx_not_none]
     df_pkg_mapped_not_none.to_csv(f"data/{sub}_pkg_mapped.csv", index=True)
+    df_pkg_mapped.to_csv(f"data/{sub}_pkg_mapped_incl_none.csv", index=True)
     
     #df_pkg_mapped_not_none = pd.read_csv(f"data/{sub}_pkg_mapped.csv", index_col=0)
 

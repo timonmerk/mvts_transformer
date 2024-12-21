@@ -63,6 +63,7 @@ def main(config):
     logger.addHandler(file_handler)
 
     logger.info('Running:\n{}\n'.format(' '.join(sys.argv)))  # command used to run
+    tensorboard_writer = SummaryWriter(config['tensorboard_dir'])
 
     if config['seed'] is not None:
         torch.manual_seed(config['seed'])
@@ -154,6 +155,10 @@ def main(config):
     optim_class = get_optimizer(config['optimizer'])
     optimizer = optim_class(model.parameters(), lr=config['lr'], weight_decay=weight_decay)
 
+    if config["scheduler"] == "OneCycleLR":
+        scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=config["lr"], steps_per_epoch=10, epochs=config["epochs"])
+    else:
+        scheduler = None
     start_epoch = 0
     lr_step = 0  # current step index of `lr_step`
     lr = config['lr']  # current learning step
@@ -193,22 +198,24 @@ def main(config):
                               pin_memory=True,
                               collate_fn=lambda x: collate_fn(x, max_len=model.max_len))
 
-    trainer = runner_class(model, train_loader, device, loss_module, optimizer, l2_reg=output_reg,
-                                 print_interval=config['print_interval'], console=config['console'])
+    trainer = runner_class(model, train_loader, device, loss_module, optimizer, scheduler=scheduler, l2_reg=output_reg,
+                           print_interval=config['print_interval'], console=config['console'])
+    trainer.tensorboard_writer = tensorboard_writer  
     val_evaluator = runner_class(model, val_loader, device, loss_module,
-                                       print_interval=config['print_interval'], console=config['console'])
+                                 print_interval=config['print_interval'], console=config['console'])
+    val_evaluator.tensorboard_writer = tensorboard_writer 
 
-    tensorboard_writer = SummaryWriter(config['tensorboard_dir'])
+    
 
     best_value = 1e16 if config['key_metric'] in NEG_METRICS else -1e16  # initialize with +inf or -inf depending on key metric
     metrics = []  # (for validation) list of lists: for each epoch, stores metrics like loss, ...
     best_metrics = {}
 
     # Evaluate on validation before training
-    #aggr_metrics_val, best_metrics, best_value = validate(val_evaluator, tensorboard_writer, config, best_metrics,
-    #                                                      best_value, epoch=0)
-    #metrics_names, metrics_values = zip(*aggr_metrics_val.items())
-    #metrics.append(list(metrics_values))
+    aggr_metrics_val, best_metrics, best_value = validate(val_evaluator, tensorboard_writer, config, best_metrics,
+                                                         best_value, epoch=0)
+    metrics_names, metrics_values = zip(*aggr_metrics_val.items())
+    metrics.append(list(metrics_values))
 
     logger.info('Starting training...')
     for epoch in tqdm(range(start_epoch + 1, config["epochs"] + 1), desc='Training Epoch', leave=False):
@@ -241,19 +248,19 @@ def main(config):
         utils.save_model(os.path.join(config['save_dir'], 'model_{}.pth'.format(mark)), epoch, model, optimizer)
 
         # Learning rate scheduling
-        if epoch == config['lr_step'][lr_step]:
-            utils.save_model(os.path.join(config['save_dir'], 'model_{}.pth'.format(epoch)), epoch, model, optimizer)
-            lr = lr * config['lr_factor'][lr_step]
-            if lr_step < len(config['lr_step']) - 1:  # so that this index does not get out of bounds
-                lr_step += 1
-            logger.info('Learning rate updated to: ', lr)
-            for param_group in optimizer.param_groups:
-                param_group['lr'] = lr
+        # if epoch == config['lr_step'][lr_step]:
+        #     utils.save_model(os.path.join(config['save_dir'], 'model_{}.pth'.format(epoch)), epoch, model, optimizer)
+        #     lr = lr * config['lr_factor'][lr_step]
+        #     if lr_step < len(config['lr_step']) - 1:  # so that this index does not get out of bounds
+        #         lr_step += 1
+        #     logger.info('Learning rate updated to: ', lr)
+        #     for param_group in optimizer.param_groups:
+        #         param_group['lr'] = lr
 
         # Difficulty scheduling
-        if config['harden'] and check_progress(epoch):
-            train_loader.dataset.update()
-            val_loader.dataset.update()
+        #if config['harden'] and check_progress(epoch):
+        #    train_loader.dataset.update()
+        #    val_loader.dataset.update()
 
     # Export evolution of metrics over epochs
     header = metrics_names

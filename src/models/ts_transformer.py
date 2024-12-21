@@ -209,17 +209,28 @@ class TransformerBatchNormEncoderLayer(nn.modules.Module):
         return src
 
 
+def _weights_init(m):
+    if isinstance(m, nn.Linear):
+        nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+    if isinstance(m, nn.Conv1d):
+        nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+    elif isinstance(m, nn.BatchNorm1d):
+        nn.init.constant_(m.weight, 1)
+        nn.init.constant_(m.bias, 0)
+
 class TSTransformerEncoder(nn.Module):
 
-    def __init__(self, feat_dim, max_len, d_model, n_heads, num_layers, dim_feedforward, dropout=0.1,
+    def __init__(self, feat_dim, max_len, d_model, n_heads, num_layers, dim_feedforward, power_dim=250, dropout=0.1,
                  pos_encoding='fixed', activation='gelu', norm='BatchNorm', freeze=False):
         super(TSTransformerEncoder, self).__init__()
 
         self.max_len = max_len
         self.d_model = d_model
         self.n_heads = n_heads
-        # add here wavelet or convnet 
-        self.project_inp = nn.Linear(feat_dim, d_model)
+        self.power_dim = power_dim   # the power dimension equals the seq-len
+        # add here wavelet or convnet
+        self.project_inp = nn.Linear(feat_dim, d_model // 2)
+        self.project_inp_f = nn.Linear(feat_dim, d_model // 2)
         self.pos_enc = get_pos_encoder(pos_encoding)(d_model, dropout=dropout*(1.0 - freeze), max_len=max_len)
 
         if norm == 'LayerNorm':
@@ -237,6 +248,9 @@ class TSTransformerEncoder(nn.Module):
 
         self.feat_dim = feat_dim
 
+        self.apply(_weights_init)
+
+
     def forward(self, X, padding_masks):
         """
         Args:
@@ -251,6 +265,20 @@ class TSTransformerEncoder(nn.Module):
         inp = torch.squeeze(inp)
         inp = self.project_inp(inp) * math.sqrt(
             self.d_model)  # [seq_length, batch_size, d_model] project input vectors to d_model dimensional space
+        
+        # do a fft on the X signal
+        X_fft = torch.transpose(torch.fft.fft(X, dim=1).abs(), 0, 1)
+        #from matplotlib import pyplot as plt
+        #fft_ = X_fft.detach().cpu().numpy()
+        #plt.plot(fft_[0, :, :])
+        #plt.show(block=True)
+        
+
+        inp_f = self.project_inp_f(X_fft)
+
+        # concatenate the two inputs
+        inp = torch.cat((inp, inp_f), 2)
+
         inp = self.pos_enc(inp)  # add positional encoding
         # NOTE: logic for padding masks is reversed to comply with definition in MultiHeadAttention, TransformerEncoderLayer
         output = self.transformer_encoder(inp, src_key_padding_mask=~padding_masks)  # (seq_length, batch_size, d_model)
