@@ -22,19 +22,43 @@ class FeatureExtractor:
     def __call__(self, module, input_, output):
         self.extracted_features = output
 
-PATH_BASE = '/Users/Timon/Documents/mvts_transformer/output/300m_seg_25_RAdam'
-PATH_BASE = "/Users/Timon/Documents/mvts_transformer/output/3m_seg_250_Adam_00001"
-PATH_PREDICTIONS = os.path.join(PATH_BASE, 'predictions', 'best_predictions.pickle')
+PATH_BASE = "/Users/Timon/Documents/mvts_transformer/output"
+model_name = "0.3m_Adam"  # "3m_seg_250_Adam_00001"  # "300m_seg_25_RAdam"
+PATH_PREDICTIONS = os.path.join(PATH_BASE, model_name, 'predictions', 'best_predictions.pickle')
+#PATH_PREDICTIONS = "/Users/Timon/Downloads/best_predictions.pickle"
 sub = "rcs02r"
 with open(PATH_PREDICTIONS, "rb") as f:
     data = pickle.load(f)
+
+PLOT_PREDICTIONS = False
+
+if PLOT_PREDICTIONS:
+    output_pdf_path = f"predictions_plots_{model_name}.pdf"
+    idx_read_  = 10
+    with PdfPages(output_pdf_path) as pdf:
+        for i in range(data["targets"][idx_read_].shape[0]):
+            if i > 200:
+                break
+            plt.figure()
+            ch_idx = 0
+            plt.plot(data["targets"][idx_read_][i, :, ch_idx], label="target")
+            plt.plot(data["predictions"][idx_read_][i, :, ch_idx], label="prediction")
+            plt.plot(data["target_masks"][idx_read_][i, :, ch_idx], label="mask")
+            plt.xlabel("Time [ms]")
+            plt.ylabel("Voltage [uV]")
+            plt.legend()
+            plt.tight_layout()
+            pdf.savefig()
+            plt.close()
+
+    plt.show(block=True)
 
 # load model
 LOAD_MODEL = True
 
 if LOAD_MODEL:
     model = model_factory(config, 4, 250)
-    MODEL_PATH = os.path.join(PATH_BASE, 'checkpoints', 'model_best.pth')
+    MODEL_PATH = os.path.join(PATH_BASE, model_name, 'checkpoints', 'model_best.pth')
     checkpoint = torch.load(MODEL_PATH, map_location=lambda storage, loc: storage)
     state_dict = deepcopy(checkpoint['state_dict'])
 
@@ -56,18 +80,18 @@ data_labels["hour"] = pd.to_datetime(data_labels["pkg_dt"]).dt.hour
 indices_valid = np.array(data_labels.index)
 test_data = test_data[indices_valid, :, :]
 
-GET_EMBEDDINGS_NET = False
+GET_EMBEDDINGS_NET = True
 if GET_EMBEDDINGS_NET:
     num_run = 20
     padding_masks = torch.from_numpy(np.ones((num_run, 250)).astype(bool))
     padding_masks = padding_masks.to(device)
     res_tr_out = []
+    extractor = FeatureExtractor()
+    model.transformer_encoder.register_forward_hook(extractor)
     for i in np.arange(0, test_data.shape[0]-num_run, num_run):
         print(i)
         X = torch.from_numpy(test_data[i:i+num_run, :, :].astype(np.float32))
         X = X.to(device)
-        extractor = FeatureExtractor()
-        model.transformer_encoder.register_forward_hook(extractor)
         output = model(X, padding_masks)
         model_extracted_features = extractor.extracted_features.cpu().detach().numpy()
         model_extracted_features_mean = model_extracted_features.mean(axis=0)
@@ -144,22 +168,4 @@ plt.xlim([1, 400])
 plt.ylim([0.4, 1])
 plt.xlabel("Epoch")
 plt.ylabel("MAE Validaiton Loss")
-plt.show(block=True)
-
-output_pdf_path = "predictions_plots.pdf"
-idx_read_  = 10
-with PdfPages(output_pdf_path) as pdf:
-    for i in range(data["targets"][idx_read_].shape[0]):
-        plt.figure()
-        ch_idx = 0
-        plt.plot(data["targets"][idx_read_][i, :, ch_idx], label="target")
-        plt.plot(data["predictions"][idx_read_][i, :, ch_idx], label="prediction")
-        plt.plot(data["target_masks"][idx_read_][i, :, ch_idx], label="mask")
-        plt.xlabel("Time [ms]")
-        plt.ylabel("Voltage [uV]")
-        plt.legend()
-        plt.tight_layout()
-        pdf.savefig()
-        plt.close()
-
 plt.show(block=True)
