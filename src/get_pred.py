@@ -20,7 +20,8 @@ class FeatureExtractor:
     def __call__(self, module, input_, output):
         self.extracted_features = output
 
-PATH_BASE = "/Users/Timon/Documents/mvts_transformer/output"
+#PATH_BASE = "/Users/Timon/Documents/mvts_transformer/output"
+PATH_BASE = "output"
 model_name = "0.3m_Adam" 
 
 model = model_factory(config, 4, 250)
