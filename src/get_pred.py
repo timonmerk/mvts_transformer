@@ -23,6 +23,8 @@ class FeatureExtractor:
 #PATH_BASE = "/Users/Timon/Documents/mvts_transformer/output"
 PATH_BASE = "output"
 model_name = "0.3m_Adam" 
+device = torch.device("cuda")
+#device = torch.device("mps")
 
 model = model_factory(config, 4, 250)
 MODEL_PATH = os.path.join(PATH_BASE, model_name, 'checkpoints', 'model_best.pth')
@@ -31,7 +33,7 @@ state_dict = deepcopy(checkpoint['state_dict'])
 
 model.load_state_dict(state_dict, strict=False)
 # get mps device
-device = torch.device("mps")
+
 model = model.to(device)
 model.eval()
 extractor = FeatureExtractor()
