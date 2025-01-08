@@ -2,6 +2,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 import pickle
 import torch
+from torch import nn
 from models.ts_transformer import model_factory
 from matplotlib.backends.backend_pdf import PdfPages
 from options import Options
@@ -12,6 +13,9 @@ import pandas as pd
 
 args = Options().parse()  # `argsparse` object
 config = setup(args)  # configuration dictionary
+config["d_model"] = 128
+config["dim_feedforward"] = 256
+config["num_layers"] = 3
 
 class FeatureExtractor:
     def __init__(self):
@@ -26,18 +30,27 @@ model_name = "0.3m_Adam"
 device = torch.device("cuda")
 #device = torch.device("mps")
 
+#model = nn.DataParallel()
 model = model_factory(config, 4, 250)
+model = torch.nn.DataParallel(model)
 MODEL_PATH = os.path.join(PATH_BASE, model_name, 'checkpoints', 'model_best.pth')
 checkpoint = torch.load(MODEL_PATH, map_location=lambda storage, loc: storage)
 state_dict = deepcopy(checkpoint['state_dict'])
+new_state_dict = {}
+for k, v in state_dict.items():
+    new_key = k.replace('model.', '')  # Remove 'module.' prefix
+    new_state_dict[new_key] = v
 
-model.load_state_dict(state_dict, strict=False)
+model.load_state_dict(new_state_dict, strict=False)
 # get mps device
 
 model = model.to(device)
 model.eval()
 extractor = FeatureExtractor()
-model.transformer_encoder.register_forward_hook(extractor)
+if type(model) == torch.nn.DataParallel:
+    model.module.transformer_encoder.register_forward_hook(extractor)
+else:
+    model.transformer_encoder.register_forward_hook(extractor)
 
 subs = np.unique([f[4:10] for f in os.listdir("data") if f.startswith("sub") and "rcs" in f])
 for sub in subs:
